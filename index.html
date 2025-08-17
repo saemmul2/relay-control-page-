@@ -3,244 +3,305 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>릴레이 제어 및 상태 확인</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <title>ESP8266 스마트 릴레이 제어</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f2f5;
-            padding: 20px;
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Gray background */
         }
-        .container {
-            max-width: 600px;
-            background-color: #ffffff;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            margin-top: 50px;
+        /* Custom styles for glowing buttons */
+        .glow-green {
+            box-shadow: 0 0 10px #4ade80, 0 0 20px #4ade80;
         }
-        .status-box {
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
+        .glow-red {
+            box-shadow: 0 0 10px #f87171, 0 0 20px #f87171;
         }
-        .status-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 0;
-            border-bottom: 1px solid #e9ecef;
+        input[type="number"] {
+            -moz-appearance: textfield;
         }
-        .status-item:last-child {
-            border-bottom: none;
-        }
-        .status-label {
-            font-weight: bold;
-            color: #495057;
-        }
-        .status-value {
-            font-weight: bold;
-        }
-        .status-connected {
-            color: #28a745;
-        }
-        .status-disconnected {
-            color: #dc3545;
-        }
-        .status-on {
-            color: #dc3545;
-        }
-        .status-off {
-            color: #28a745;
-        }
-        .control-section {
-            padding-top: 20px;
-            border-top: 1px solid #e9ecef;
-        }
-        .control-buttons .btn {
-            margin: 5px;
-            width: calc(33.333% - 10px);
-        }
-        .setting-time-group {
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        .setting-time-group .form-control {
-            width: 80px;
-            text-align: center;
-        }
-        .setting-time-group span {
-            margin: 0 5px;
-            font-size: 1.2rem;
-            font-weight: bold;
-        }
-        .time-info {
-            font-size: 1rem;
-            color: #6c757d;
-            margin-top: 10px;
-        }
-        .time-info .note {
-            font-size: 0.8rem;
-            color: #999;
-        }
-        @media (max-width: 576px) {
-            .control-buttons .btn {
-                width: 100%;
-                margin: 5px 0;
-            }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
     </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
 </head>
-<body>
+<body class="flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md mx-4">
+        <h1 class="text-2xl font-bold text-gray-800 text-center mb-1">스마트 릴레이 제어</h1>
+        <p class="text-gray-500 text-center text-sm mb-6">ESP8266을 이용한 MQTT 원격 제어</p>
 
-<div class="container">
-    <h2 class="text-center mb-4">릴레이 제어 및 상태 확인</h2>
+        <div class="mb-6 space-y-2 text-left bg-gray-50 p-4 rounded-lg">
+            <p class="text-gray-700">현재 시간 (KST): <span id="current-time" class="font-bold text-blue-600">불러오는 중...</span></p>
+            <p class="text-gray-700">일몰 시간 (KST): <span id="sunset-time" class="font-bold text-purple-600">불러오는 중...</span></p>
+            <p class="text-gray-700">릴레이 끄는 시간: <span id="auto-off-time" class="font-bold text-orange-500">21:00 (기본)</span></p>
+            <p class="text-xs text-gray-500 mt-2">(*이 시간 정보는 ESP8266에서 MQTT로 발행해야 표시됩니다.)</p>
+        </div>
 
-    <div class="status-box">
-        <div class="status-item">
-            <span class="status-label">현재 시간 (KST):</span>
-            <span id="current-time" class="status-value">정보 없음</span>
+        <div class="mb-6 space-y-4">
+            <div class="flex justify-between items-center bg-gray-100 p-4 rounded-lg">
+                <span class="text-gray-700 font-medium">MQTT 연결 상태:</span>
+                <span id="mqtt-status" class="font-bold text-red-500">연결 끊김</span>
+            </div>
+            <div class="flex justify-between items-center bg-gray-100 p-4 rounded-lg">
+                <span class="text-gray-700 font-medium">릴레이 상태:</span>
+                <span id="relay-status" class="font-bold text-gray-400">알 수 없음</span>
+            </div>
+            <div class="flex justify-between items-center bg-gray-100 p-4 rounded-lg">
+                <span class="text-gray-700 font-medium">제어 모드:</span>
+                <span id="control-mode" class="font-bold text-gray-400">알 수 없음</span>
+            </div>
         </div>
-        <div class="status-item">
-            <span class="status-label">일몰 시간 (KST):</span>
-            <span id="sunset-time" class="status-value">정보 없음</span>
-        </div>
-        <div class="status-item">
-            <span class="status-label">릴레이 끄는 시간:</span>
-            <span id="auto-off-time" class="status-value">정보 없음</span>
-        </div>
-        <div class="time-info">
-            <span class="note">(*이 시간 정보는 ESP8266에서 MQTT로 발행해야 표시됩니다.)</span>
-        </div>
-    </div>
 
-    <div class="status-box">
-        <div class="status-item">
-            <span class="status-label">MQTT 연결 상태:</span>
-            <span id="mqtt-status" class="status-value status-disconnected">연결 안됨</span>
+        <div class="mb-6">
+            <h3 class="text-lg font-bold text-gray-800 text-center mb-2">릴레이 끄는 시간 설정</h3>
+            <div class="flex items-center justify-center space-x-2">
+                <input type="number" id="off-hour" min="0" max="23" value="21"
+                        class="w-16 p-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:border-blue-500">
+                <span class="text-gray-600">:</span>
+                <input type="number" id="off-minute" min="0" max="59" value="0"
+                        class="w-16 p-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:border-blue-500">
+                <button id="set-time-btn"
+                        class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors duration-200">
+                    설정
+                </button>
+            </div>
         </div>
-        <div class="status-item">
-            <span class="status-label">릴레이 상태:</span>
-            <span id="relay-status" class="status-value status-off">꺼짐</span>
-        </div>
-        <div class="status-item">
-            <span class="status-label">제어 모드:</span>
-            <span id="control-mode" class="status-value">자동</span>
-        </div>
-    </div>
 
-    <div class="control-section">
-        <h4 class="text-center">릴레이 끄는 시간 설정</h4>
-        <div class="setting-time-group d-flex justify-content-center">
-            <input type="number" id="set-hour" class="form-control" value="21" min="0" max="23">
-            <span>:</span>
-            <input type="number" id="set-minute" class="form-control" value="0" min="0" max="59">
-            <button class="btn btn-warning ms-2" onclick="send_set_time()">설정</button>
-        </div>
-        
-        <h4 class="text-center mt-4">수동 제어 및 모드 변경</h4>
-        <div class="control-buttons text-center">
-            <button class="btn btn-success" onclick="send_on()">릴레이 켜기</button>
-            <button class="btn btn-danger" onclick="send_off()">릴레이 끄기</button>
-            <button class="btn btn-primary" onclick="send_auto()">자동 모드</button>
-        </div>
-        
-        <h4 class="text-center mt-4">EEPROM 초기화</h4>
-        <div class="control-buttons text-center">
-            <button class="btn btn-danger" onclick="send_reset_eeprom()">EEPROM 초기화</button>
+        <div class="grid grid-cols-3 gap-4 mb-4">
+            <button id="relay-on-btn"
+                    class="bg-green-500 text-white font-bold py-3 px-2 rounded-lg hover:bg-green-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-green-400">
+                릴레이 켜기
+            </button>
+            <button id="relay-off-btn"
+                    class="bg-red-500 text-white font-bold py-3 px-2 rounded-lg hover:bg-red-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-red-400">
+                릴레이 끄기
+            </button>
+            <button id="auto-mode-btn"
+                    class="bg-blue-500 text-white font-bold py-3 px-2 rounded-lg hover:bg-blue-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                자동 모드
+            </button>
         </div>
         
+        <div class="flex justify-center mb-4">
+            <button id="reset-btn"
+                    class="bg-gray-500 text-white font-bold py-3 px-20 rounded-lg hover:bg-gray-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-gray-400">
+                EEPROM 초기화
+            </button>
+        </div>
+        <p class="text-sm text-gray-500 text-center">릴레이 상태는 MQTT 토픽 구독을 통해 실시간으로 업데이트됩니다.</p>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
-<script>
-    const mqtt_server = "2ad3a77d41d54305b9155c4fce321dd3.s1.eu.hivemq.cloud";
-    const mqtt_port = 8884;
-    const mqtt_user = "edench";
-    const mqtt_password = "Eden1440";
+    <script>
+        window.onload = function () {
+            // ⭐ HiveMQ Cloud MQTT Broker Information - 여기에 직접 입력하세요 ⭐
+            const MQTT_HOST = "2ad3a77d41d54305b9155c4fce321dd3.s1.eu.hivemq.cloud";
+            const MQTT_PORT = 8884;
+            const MQTT_USERNAME = "edench";
+            const MQTT_PASSWORD = "Eden1440";
+            // ⭐ 위 정보를 정확히 입력해야 합니다. ⭐
 
-    const topic_status = "esp32/status";
-    const topic_time = "esp32/time_data";
-    const topic_control = "esp32/control";
+            // HTML elements
+            const relayOnBtn = document.getElementById('relay-on-btn');
+            const relayOffBtn = document.getElementById('relay-off-btn');
+            const autoModeBtn = document.getElementById('auto-mode-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const setTimeBtn = document.getElementById('set-time-btn');
+            const offHourInput = document.getElementById('off-hour');
+            const offMinuteInput = document.getElementById('off-minute');
+            const autoOffTimeDisplay = document.getElementById('auto-off-time');
+            
+            const mqttStatusElement = document.getElementById('mqtt-status');
+            const relayStatusElement = document.getElementById('relay-status');
+            const controlModeElement = document.getElementById('control-mode');
+            const currentTimeElement = document.getElementById('current-time');
+            const sunsetTimeElement = document.getElementById('sunset-time');
 
-    const client = mqtt.connect(`wss://${mqtt_server}:${mqtt_port}/mqtt`, {
-        username: mqtt_user,
-        password: mqtt_password
-    });
+            let client = null;
+            let relayState = "OFF";
+            let controlMode = "auto";
+            
+            // 아두이노 코드와 동일한 토픽
+            const PUBLISH_TOPIC = "esp32/control";
+            const SUBSCRIBE_STATUS_TOPIC = "esp32/status";
+            const SUBSCRIBE_TIME_TOPIC = "esp32/time_data";
 
-    client.on('connect', function () {
-        document.getElementById('mqtt-status').textContent = '연결됨';
-        document.getElementById('mqtt-status').className = 'status-value status-connected';
-        console.log("MQTT Connected");
-        client.subscribe(topic_status);
-        client.subscribe(topic_time);
-        publish_message(topic_control, "CHECK_SETTINGS"); // 연결 시 설정값 요청
-    });
+            // Event Listeners
+            relayOnBtn.addEventListener('click', () => publishMessage('ON'));
+            relayOffBtn.addEventListener('click', () => publishMessage('OFF'));
+            // 자동 모드 버튼의 메시지를 'auto'에서 'TOGGLE_MODE'로 변경
+            autoModeBtn.addEventListener('click', () => publishMessage('TOGGLE_MODE'));
+            // 리셋 버튼의 메시지를 'RESET_EEPROM'으로 변경
+            resetBtn.addEventListener('click', () => {
+                const confirmReset = confirm("EEPROM 초기화 시, 릴레이 끄는 시간이 21시로 초기화됩니다. 계속하시겠습니까?");
+                if (confirmReset) {
+                    publishMessage('RESET_EEPROM');
+                }
+            });
+            
+            setTimeBtn.addEventListener('click', () => {
+                const hour = offHourInput.value.padStart(2, '0');
+                const minute = offMinuteInput.value.padStart(2, '0');
+                const message = `SET_TIME:${hour}:${minute}`;
+                publishMessage(message);
+                // MQTT 응답이 올 때까지 임시로 표시
+                autoOffTimeDisplay.textContent = `${hour}:${minute}`;
+            });
 
-    client.on('error', function (error) {
-        document.getElementById('mqtt-status').textContent = '연결 안됨';
-        document.getElementById('mqtt-status').className = 'status-value status-disconnected';
-        console.error("MQTT Error: ", error);
-    });
-
-    client.on('message', function (topic, message) {
-        try {
-            const msgStr = message.toString();
-            console.log(`Message received on topic ${topic}: ${msgStr}`);
-
-            if (topic === topic_status) {
-                const data = JSON.parse(msgStr);
-                document.getElementById('relay-status').textContent = (data.status === 'ON') ? '켜짐' : '꺼짐';
-                document.getElementById('relay-status').className = 'status-value ' + ((data.status === 'ON') ? 'status-on' : 'status-off');
-                document.getElementById('control-mode').textContent = (data.mode === 'auto') ? '자동' : '수동';
-
-            } else if (topic === topic_time) {
-                const data = JSON.parse(msgStr);
-                document.getElementById('current-time').textContent = data.current_time;
-                document.getElementById('sunset-time').textContent = data.sunset_time;
-                document.getElementById('auto-off-time').textContent = data.auto_off_time;
+            // Functions
+            function publishMessage(message) {
+                if (client && client.isConnected()) {
+                    const mqttMessage = new Paho.MQTT.Message(message);
+                    mqttMessage.destinationName = PUBLISH_TOPIC;
+                    client.send(mqttMessage);
+                    console.log(`메시지 전송: 토픽=${PUBLISH_TOPIC}, 페이로드=${message}`);
+                } else {
+                    console.error("MQTT에 연결되지 않아 메시지를 보낼 수 없습니다.");
+                    mqttStatusElement.textContent = '연결 끊김';
+                    mqttStatusElement.classList.remove('text-green-500');
+                    mqttStatusElement.classList.add('text-red-500');
+                }
             }
-        } catch (e) {
-            console.error("Error parsing message: ", e);
-        }
-    });
 
-    function publish_message(topic, message) {
-        if (client.connected) {
-            client.publish(topic, message);
-        } else {
-            console.error("Client not connected, cannot publish message.");
-        }
-    }
+            function updateRelayStatusDisplay() {
+                if (relayState === 'ON') {
+                    relayStatusElement.textContent = '켜짐';
+                    relayStatusElement.classList.remove('text-gray-400', 'text-red-500', 'glow-red');
+                    relayStatusElement.classList.add('text-green-500', 'glow-green');
+                } else if (relayState === 'OFF') {
+                    relayStatusElement.textContent = '꺼짐';
+                    relayStatusElement.classList.remove('text-gray-400', 'text-green-500', 'glow-green');
+                    relayStatusElement.classList.add('text-red-500', 'glow-red');
+                } else {
+                    relayStatusElement.textContent = '알 수 없음';
+                    relayStatusElement.classList.remove('text-green-500', 'text-red-500', 'glow-red', 'glow-green');
+                    relayStatusElement.classList.add('text-gray-400');
+                }
+            }
 
-    function send_on() {
-        publish_message(topic_control, "ON");
-    }
+            function updateControlModeDisplay() {
+                if (controlMode === 'manual') {
+                    controlModeElement.textContent = '수동';
+                    controlModeElement.classList.remove('text-gray-400', 'text-green-500');
+                    controlModeElement.classList.add('text-red-500');
+                } else if (controlMode === 'auto') {
+                    controlModeElement.textContent = '자동';
+                    controlModeElement.classList.remove('text-gray-400', 'text-red-500');
+                    controlModeElement.classList.add('text-green-500');
+                } else {
+                    controlModeElement.textContent = '알 수 없음';
+                    controlModeElement.classList.remove('text-green-500', 'text-red-500');
+                    controlModeElement.classList.add('text-gray-400');
+                }
+            }
 
-    function send_off() {
-        publish_message(topic_control, "OFF");
-    }
+            // 시간 정보를 업데이트하는 함수
+            function updateTimeDisplay(currentTime, sunsetTime, autoOffTime) {
+                currentTimeElement.textContent = currentTime || '정보 없음';
+                sunsetTimeElement.textContent = sunsetTime || '정보 없음';
+                autoOffTimeDisplay.textContent = autoOffTime || '정보 없음';
+            }
 
-    function send_auto() {
-        publish_message(topic_control, "auto");
-    }
+            function connectMQTT() {
+                try {
+                    const clientId = "web_client_" + parseInt(Math.random() * 1000000);
+                    console.log(`MQTT 연결 시도: ${MQTT_HOST}:${MQTT_PORT}, ClientID: ${clientId}`);
 
-    function send_set_time() {
-        const hour = document.getElementById('set-hour').value;
-        const minute = document.getElementById('set-minute').value;
-        publish_message(topic_control, `SET_TIME:${hour}:${minute}`);
-    }
+                    client = new Paho.MQTT.Client(MQTT_HOST, MQTT_PORT, clientId);
+                    client.onConnectionLost = onConnectionLost;
+                    client.onMessageArrived = onMessageArrived;
 
-    function send_reset_eeprom() {
-        const confirmReset = confirm("EEPROM 초기화 시, 릴레이 끄는 시간이 21시로 초기화됩니다. 계속하시겠습니까?");
-        if (confirmReset) {
-            publish_message(topic_control, "RESET_EEPROM");
-        }
-    }
-</script>
+                    mqttStatusElement.textContent = '연결 중...';
+                    mqttStatusElement.classList.remove('text-green-500', 'text-red-500');
+                    mqttStatusElement.classList.add('text-gray-500');
 
+                    client.connect({
+                        useSSL: true,
+                        userName: MQTT_USERNAME,
+                        password: MQTT_PASSWORD,
+                        onSuccess: onConnect,
+                        onFailure: onFailure,
+                        timeout: 3,
+                    });
+                } catch (e) {
+                    console.error("MQTT 연결 시도 중 오류 발생:", e);
+                    mqttStatusElement.textContent = '연결 끊김';
+                    mqttStatusElement.classList.remove('text-gray-500', 'text-green-500');
+                    mqttStatusElement.classList.add('text-red-500');
+                }
+            }
+
+            function onConnect() {
+                console.log("MQTT 연결 성공!");
+                mqttStatusElement.textContent = '연결됨';
+                mqttStatusElement.classList.remove('text-gray-500', 'text-red-500');
+                mqttStatusElement.classList.add('text-green-500');
+                client.subscribe(SUBSCRIBE_STATUS_TOPIC);
+                client.subscribe(SUBSCRIBE_TIME_TOPIC);
+                console.log(`토픽 구독: ${SUBSCRIBE_STATUS_TOPIC}, ${SUBSCRIBE_TIME_TOPIC}`);
+
+                // 초기 상태 요청
+                publishMessage('CHECK_SETTINGS');
+            }
+
+            function onFailure(responseObject) {
+                if (responseObject.errorCode !== 0) {
+                    console.error("MQTT 연결 실패:", responseObject.errorMessage);
+                }
+                mqttStatusElement.textContent = '연결 끊김';
+                mqttStatusElement.classList.remove('text-gray-500', 'text-green-500');
+                mqttStatusElement.classList.add('text-red-500');
+            }
+
+            function onConnectionLost(responseObject) {
+                if (responseObject.errorCode !== 0) {
+                    console.warn("MQTT 연결 끊김:", responseObject.errorMessage);
+                    setTimeout(connectMQTT, 3000);
+                }
+                mqttStatusElement.textContent = '연결 끊김';
+                mqttStatusElement.classList.remove('text-gray-500', 'text-green-500');
+                mqttStatusElement.classList.add('text-red-500');
+            }
+
+            function onMessageArrived(message) {
+                console.log("새 메시지 수신:", message.payloadString);
+                if (message.destinationName === SUBSCRIBE_STATUS_TOPIC) {
+                    try {
+                        const statusData = JSON.parse(message.payloadString);
+                        relayState = statusData.status;
+                        controlMode = statusData.mode;
+
+                        updateRelayStatusDisplay();
+                        updateControlModeDisplay();
+                    } catch (e) {
+                        console.error("수신된 릴레이 상태/모드 메시지 파싱 오류:", e);
+                    }
+                } else if (message.destinationName === SUBSCRIBE_TIME_TOPIC) {
+                    try {
+                        const timeData = JSON.parse(message.payloadString);
+                        updateTimeDisplay(
+                            timeData.current_time,
+                            timeData.sunset_time,
+                            timeData.auto_off_time
+                        );
+                    } catch (e) {
+                        console.error("수신된 시간 메시지 파싱 오류:", e);
+                    }
+                }
+            }
+            
+            // 페이지 로드 시 초기 디스플레이 설정
+            updateRelayStatusDisplay();
+            updateControlModeDisplay();
+            updateTimeDisplay();
+            
+            // 페이지 로드 시 자동으로 MQTT 연결 시도
+            connectMQTT();
+        };
+    </script>
 </body>
 </html>
