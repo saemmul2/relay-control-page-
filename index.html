@@ -127,7 +127,7 @@
         </div>
         <div class="status-item">
             <span class="status-label">제어 모드:</span>
-            <span id="control-mode" class="status-value">수동</span>
+            <span id="control-mode" class="status-value">자동</span>
         </div>
     </div>
 
@@ -139,13 +139,16 @@
             <input type="number" id="set-minute" class="form-control" value="0" min="0" max="59">
             <button class="btn btn-warning ms-2" onclick="send_set_time()">설정</button>
         </div>
-        <h4 class="text-center">수동 제어 및 모드 변경</h4>
+        
+        <h4 class="text-center mt-4">수동 제어 및 모드 변경</h4>
         <div class="control-buttons text-center">
             <button class="btn btn-success" onclick="send_on()">릴레이 켜기</button>
             <button class="btn btn-danger" onclick="send_off()">릴레이 끄기</button>
             <button class="btn btn-primary" onclick="send_auto()">자동 모드</button>
         </div>
-        <div class="control-buttons text-center mt-3">
+        
+        <h4 class="text-center mt-4">EEPROM 초기화</h4>
+        <div class="control-buttons text-center">
             <button class="btn btn-danger" onclick="send_reset_eeprom()">EEPROM 초기화</button>
         </div>
         
@@ -174,7 +177,7 @@
         console.log("MQTT Connected");
         client.subscribe(topic_status);
         client.subscribe(topic_time);
-        publish_message(topic_control, "REQUEST_STATUS"); // 연결 시 상태 요청
+        publish_message(topic_control, "CHECK_SETTINGS"); // 연결 시 설정값 요청
     });
 
     client.on('error', function (error) {
