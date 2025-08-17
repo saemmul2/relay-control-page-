@@ -66,7 +66,7 @@
                 <input type="number" id="off-minute" min="0" max="59" value="0"
                         class="w-16 p-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:border-blue-500">
                 <button id="set-time-btn"
-                        class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors duration-200">
+                        class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors duration-200" onclick="send_set_time()">
                     설정
                 </button>
             </div>
@@ -74,22 +74,22 @@
 
         <div class="grid grid-cols-3 gap-4 mb-4">
             <button id="relay-on-btn"
-                    class="bg-green-500 text-white font-bold py-3 px-2 rounded-lg hover:bg-green-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-green-400">
+                    class="bg-green-500 text-white font-bold py-3 px-2 rounded-lg hover:bg-green-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-green-400" onclick="send_on()">
                 릴레이 켜기
             </button>
             <button id="relay-off-btn"
-                    class="bg-red-500 text-white font-bold py-3 px-2 rounded-lg hover:bg-red-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-red-400">
+                    class="bg-red-500 text-white font-bold py-3 px-2 rounded-lg hover:bg-red-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-red-400" onclick="send_off()">
                 릴레이 끄기
             </button>
             <button id="auto-mode-btn"
-                    class="bg-blue-500 text-white font-bold py-3 px-2 rounded-lg hover:bg-blue-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    class="bg-blue-500 text-white font-bold py-3 px-2 rounded-lg hover:bg-blue-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400" onclick="send_toggle_mode()">
                 자동 모드
             </button>
         </div>
         
         <div class="flex justify-center mb-4">
             <button id="reset-btn"
-                    class="bg-gray-500 text-white font-bold py-3 px-20 rounded-lg hover:bg-gray-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-gray-400">
+                    class="bg-gray-500 text-white font-bold py-3 px-20 rounded-lg hover:bg-gray-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-gray-400" onclick="send_reset_eeprom()">
                 EEPROM 초기화
             </button>
         </div>
@@ -106,53 +106,23 @@
             // ⭐ 위 정보를 정확히 입력해야 합니다. ⭐
 
             // HTML elements
-            const relayOnBtn = document.getElementById('relay-on-btn');
-            const relayOffBtn = document.getElementById('relay-off-btn');
-            const autoModeBtn = document.getElementById('auto-mode-btn');
-            const resetBtn = document.getElementById('reset-btn');
-            const setTimeBtn = document.getElementById('set-time-btn');
-            const offHourInput = document.getElementById('off-hour');
-            const offMinuteInput = document.getElementById('off-minute');
-            const autoOffTimeDisplay = document.getElementById('auto-off-time');
-            
             const mqttStatusElement = document.getElementById('mqtt-status');
             const relayStatusElement = document.getElementById('relay-status');
             const controlModeElement = document.getElementById('control-mode');
             const currentTimeElement = document.getElementById('current-time');
             const sunsetTimeElement = document.getElementById('sunset-time');
+            const autoOffTimeDisplay = document.getElementById('auto-off-time');
+            const offHourInput = document.getElementById('off-hour');
+            const offMinuteInput = document.getElementById('off-minute');
+
 
             let client = null;
-            let relayState = "OFF";
-            let controlMode = "auto";
             
             // 아두이노 코드와 동일한 토픽
             const PUBLISH_TOPIC = "esp32/control";
             const SUBSCRIBE_STATUS_TOPIC = "esp32/status";
             const SUBSCRIBE_TIME_TOPIC = "esp32/time_data";
 
-            // Event Listeners
-            relayOnBtn.addEventListener('click', () => publishMessage('ON'));
-            relayOffBtn.addEventListener('click', () => publishMessage('OFF'));
-            // 자동 모드 버튼의 메시지를 'auto'에서 'TOGGLE_MODE'로 변경
-            autoModeBtn.addEventListener('click', () => publishMessage('TOGGLE_MODE'));
-            // 리셋 버튼의 메시지를 'RESET_EEPROM'으로 변경
-            resetBtn.addEventListener('click', () => {
-                const confirmReset = confirm("EEPROM 초기화 시, 릴레이 끄는 시간이 21시로 초기화됩니다. 계속하시겠습니까?");
-                if (confirmReset) {
-                    publishMessage('RESET_EEPROM');
-                }
-            });
-            
-            setTimeBtn.addEventListener('click', () => {
-                const hour = offHourInput.value.padStart(2, '0');
-                const minute = offMinuteInput.value.padStart(2, '0');
-                const message = `SET_TIME:${hour}:${minute}`;
-                publishMessage(message);
-                // MQTT 응답이 올 때까지 임시로 표시
-                autoOffTimeDisplay.textContent = `${hour}:${minute}`;
-            });
-
-            // Functions
             function publishMessage(message) {
                 if (client && client.isConnected()) {
                     const mqttMessage = new Paho.MQTT.Message(message);
@@ -167,12 +137,40 @@
                 }
             }
 
-            function updateRelayStatusDisplay() {
-                if (relayState === 'ON') {
+            window.send_on = function() {
+                publishMessage("ON");
+            };
+
+            window.send_off = function() {
+                publishMessage("OFF");
+            };
+
+            window.send_toggle_mode = function() {
+                publishMessage("TOGGLE_MODE");
+            };
+
+            window.send_set_time = function() {
+                const hour = offHourInput.value.padStart(2, '0');
+                const minute = offMinuteInput.value.padStart(2, '0');
+                publishMessage(`SET_TIME:${hour}:${minute}`);
+            };
+
+            window.send_reset_eeprom = function() {
+                const confirmReset = confirm("EEPROM 초기화 시, 릴레이 끄는 시간이 21:00으로 초기화됩니다. 계속하시겠습니까?");
+                if (confirmReset) {
+                    publishMessage("RESET_EEPROM");
+                    // EEPROM 초기화 메시지 전송 후, 입력 필드 값도 21:00으로 즉시 변경
+                    offHourInput.value = "21";
+                    offMinuteInput.value = "0";
+                }
+            };
+
+            function updateRelayStatusDisplay(status, mode) {
+                if (status === 'ON') {
                     relayStatusElement.textContent = '켜짐';
                     relayStatusElement.classList.remove('text-gray-400', 'text-red-500', 'glow-red');
                     relayStatusElement.classList.add('text-green-500', 'glow-green');
-                } else if (relayState === 'OFF') {
+                } else if (status === 'OFF') {
                     relayStatusElement.textContent = '꺼짐';
                     relayStatusElement.classList.remove('text-gray-400', 'text-green-500', 'glow-green');
                     relayStatusElement.classList.add('text-red-500', 'glow-red');
@@ -181,14 +179,12 @@
                     relayStatusElement.classList.remove('text-green-500', 'text-red-500', 'glow-red', 'glow-green');
                     relayStatusElement.classList.add('text-gray-400');
                 }
-            }
 
-            function updateControlModeDisplay() {
-                if (controlMode === 'manual') {
+                if (mode === 'manual') {
                     controlModeElement.textContent = '수동';
                     controlModeElement.classList.remove('text-gray-400', 'text-green-500');
                     controlModeElement.classList.add('text-red-500');
-                } else if (controlMode === 'auto') {
+                } else if (mode === 'auto') {
                     controlModeElement.textContent = '자동';
                     controlModeElement.classList.remove('text-gray-400', 'text-red-500');
                     controlModeElement.classList.add('text-green-500');
@@ -199,11 +195,10 @@
                 }
             }
 
-            // 시간 정보를 업데이트하는 함수
             function updateTimeDisplay(currentTime, sunsetTime, autoOffTime) {
                 currentTimeElement.textContent = currentTime || '정보 없음';
                 sunsetTimeElement.textContent = sunsetTime || '정보 없음';
-                autoOffTimeDisplay.textContent = autoOffTime || '정보 없음';
+                autoOffTimeDisplay.textContent = autoOffTime || '21:00 (기본)';
             }
 
             function connectMQTT() {
@@ -244,8 +239,7 @@
                 client.subscribe(SUBSCRIBE_TIME_TOPIC);
                 console.log(`토픽 구독: ${SUBSCRIBE_STATUS_TOPIC}, ${SUBSCRIBE_TIME_TOPIC}`);
 
-                // 초기 상태 요청
-                publishMessage('CHECK_SETTINGS');
+                publishMessage("REQUEST_STATUS");
             }
 
             function onFailure(responseObject) {
@@ -272,11 +266,7 @@
                 if (message.destinationName === SUBSCRIBE_STATUS_TOPIC) {
                     try {
                         const statusData = JSON.parse(message.payloadString);
-                        relayState = statusData.status;
-                        controlMode = statusData.mode;
-
-                        updateRelayStatusDisplay();
-                        updateControlModeDisplay();
+                        updateRelayStatusDisplay(statusData.status, statusData.mode);
                     } catch (e) {
                         console.error("수신된 릴레이 상태/모드 메시지 파싱 오류:", e);
                     }
@@ -294,12 +284,6 @@
                 }
             }
             
-            // 페이지 로드 시 초기 디스플레이 설정
-            updateRelayStatusDisplay();
-            updateControlModeDisplay();
-            updateTimeDisplay();
-            
-            // 페이지 로드 시 자동으로 MQTT 연결 시도
             connectMQTT();
         };
     </script>
