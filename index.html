@@ -61,10 +61,10 @@
             <h3 class="text-lg font-bold text-gray-800 text-center mb-2">릴레이 끄는 시간 설정</h3>
             <div class="flex items-center justify-center space-x-2">
                 <input type="number" id="off-hour" min="0" max="23" value="21"
-                        class="w-16 p-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:border-blue-500">
+                       class="w-16 p-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:border-blue-500">
                 <span class="text-gray-600">:</span>
                 <input type="number" id="off-minute" min="0" max="59" value="0"
-                        class="w-16 p-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:border-blue-500">
+                       class="w-16 p-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:border-blue-500">
                 <button id="set-time-btn"
                         class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors duration-200">
                     설정
@@ -86,11 +86,14 @@
                 자동 모드
             </button>
         </div>
-        
-        <div class="flex justify-center mb-4">
-            <button id="reset-btn"
-                    class="bg-gray-500 text-white font-bold py-3 px-20 rounded-lg hover:bg-gray-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-gray-400">
-                리셋하기
+        <div class="flex justify-center gap-4 mb-4">
+            <button id="check-btn"
+                    class="bg-gray-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-600 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-gray-400">
+                설정 확인
+            </button>
+            <button id="reset-eeprom-btn"
+                    class="bg-red-700 text-white font-bold py-3 px-6 rounded-lg hover:bg-red-800 transition-colors duration-200 shadow-md focus:outline-none focus:ring-2 focus:ring-red-600">
+                EEPROM 초기화
             </button>
         </div>
         <p class="text-sm text-gray-500 text-center">릴레이 상태는 MQTT 토픽 구독을 통해 실시간으로 업데이트됩니다.</p>
@@ -109,7 +112,8 @@
             const relayOnBtn = document.getElementById('relay-on-btn');
             const relayOffBtn = document.getElementById('relay-off-btn');
             const autoModeBtn = document.getElementById('auto-mode-btn');
-            const resetBtn = document.getElementById('reset-btn');
+            const resetEepromBtn = document.getElementById('reset-eeprom-btn');
+            const checkBtn = document.getElementById('check-btn');
             const setTimeBtn = document.getElementById('set-time-btn');
             const offHourInput = document.getElementById('off-hour');
             const offMinuteInput = document.getElementById('off-minute');
@@ -134,11 +138,12 @@
             relayOnBtn.addEventListener('click', () => publishMessage('ON'));
             relayOffBtn.addEventListener('click', () => publishMessage('OFF'));
             autoModeBtn.addEventListener('click', () => publishMessage('auto'));
-            resetBtn.addEventListener('click', () => publishMessage('RESET'));
+            resetEepromBtn.addEventListener('click', () => publishMessage('RESET_EEPROM'));
+            checkBtn.addEventListener('click', () => publishMessage('CHECK_SETTINGS'));
             setTimeBtn.addEventListener('click', () => {
                 const hour = offHourInput.value;
                 const minute = offMinuteInput.value;
-                const message = `SET_TIME:${hour}:${minute}`; // 새로운 형식의 메시지
+                const message = `SET_TIME:${hour}:${minute}`;
                 publishMessage(message);
                 autoOffTimeDisplay.textContent = `${hour}:${minute}`;
             });
@@ -191,9 +196,10 @@
             }
 
             // 시간 정보를 업데이트하는 함수
-            function updateTimeDisplay(currentTime, sunriseTime, sunsetTime) {
+            function updateTimeDisplay(currentTime, sunriseTime, sunsetTime, autoOffTime) {
                 currentTimeElement.textContent = currentTime || '정보 없음';
                 sunsetTimeElement.textContent = sunsetTime || '정보 없음';
+                autoOffTimeDisplay.textContent = autoOffTime || '정보 없음';
             }
 
             function connectMQTT() {
@@ -276,8 +282,13 @@
                         updateTimeDisplay(
                             timeData.current_time,
                             timeData.sunrise_time,
-                            timeData.sunset_time
+                            timeData.sunset_time,
+                            timeData.auto_off_time
                         );
+                        // EEPROM 초기화 버튼을 눌렀을 때만 페이지 새로고침
+                        if (message.payloadString.includes("RESET_EEPROM")) {
+                            window.location.reload(true);
+                        }
                     } catch (e) {
                         console.error("수신된 시간 메시지 파싱 오류:", e);
                     }
